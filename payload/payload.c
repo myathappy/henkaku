@@ -233,28 +233,28 @@ void *find_import(module_info_t *mod, uint32_t lnid, uint32_t fnid) {
 
 static void (*debug_print)(char *fmt, ...) = 0;
 
-static int (*hook_resume_sbl_F3411881)() = 0;
-static int (*hook_resume_sbl_89CCDA2C)() = 0;
-static int (*hook_resume_sbl_BC422443)() = 0;
+static int (*sbl_parse_header)() = 0;
+static int (*sbl_set_up_buffer)() = 0;
+static int (*sbl_decrypt)() = 0;
 
 static int (*ksceKernelGetModuleList)() = 0;
 static int (*ksceKernelGetModuleInfo)() = 0;
-static void (*SceCpuForDriver_19f17bd0_flush_icache)(uint32_t addr, uint32_t size) = 0;
-static int (*SceCpuForDriver_9CB9F0CE_flush_dcache)(uint32_t addr, uint32_t len) = 0;
+static void (*ksceKernelCpuIcacheAndL2WritebackInvalidateRange)(uint32_t addr, uint32_t size) = 0;
+static int (*ksceKernelCpuDcacheWritebackRange)(uint32_t addr, uint32_t len) = 0;
 static int (*ksceIoOpen)(const char *, int, int) = 0;
 static int (*ksceIoWrite)(int, char *, int) = 0;
 static int (*ksceIoClose)(int) = 0;
-static int (*SceAppMgrForDriver_launchbypath)(const char *name, const char *cmd, int cmdlen, int, void *, void *) = 0;
-static int (*ksceKernelLoadModuleWithoutStart)(const char *path, int flags, int *opt) = 0;
+static int (*ksceAppMgrLaunchAppByPath)(const char *name, const char *cmd, int cmdlen, int, void *, void *) = 0;
+static int (*ksceKernelLoadModule)(const char *path, int flags, int *opt) = 0;
 static int (*ksceKernelStartModule)(int modid, int argc, void *args, int flags, void *opt, int *res) = 0;
-static void (*SceModulemgrForKernel_0xB427025E_set_syscall)(u32_t num, void *function) = 0;
+static void (*ksceKernelSetSyscall)(u32_t num, void *function) = 0;
 static int (*ksceKernelFreeMemBlock)(int blkid) = 0;
 static int (*ksceKernelFindMemBlockByAddr)(void *base, int) = 0;
 static int (*ksceKernelCreateThread)() = 0;
 static int (*ksceKernelStartThread)() = 0;
 static int (*ksceKernelExitDeleteThread)() = 0;
 static int (*ksceKernelGetMemBlockBase)(int uid, void **base) = 0;
-static int (*SceProcessmgrForDriver_0AFF3EAE_get_data)(int pid, int *data) = 0;
+static int (*ksceKernelGetProcessInfo)(int pid, int *data) = 0;
 
 // context for the hooks
 static unsigned g_homebrew_decrypt = 0;
@@ -273,37 +273,36 @@ static int syscall_id = 0;
 // shell
 static int shell_pid = 0;
 
-int hook_SceSblAIMgrForDriver_D78B04A2(void)
+int sbl_is_cex_patched(void)
 {
 	return 1;
 }
 
-int hook_SceSblAIMgrForDriver_F4B98F66(void)
+int sbl_is_dex_patched(void)
 {
 	return 1;
 }
 
-int hook_sysroot_421EFC96(void)
+int sysroot_421EFC96_patched(void)
 {
 	return 0;
 }
 
-// setup file decryption
-unsigned hook_sbl_F3411881(unsigned a1, unsigned a2, unsigned a3, unsigned a4) {
-	LOG("sbl_F3411881(0x%x, 0x%x, 0x%x, 0x%x)", a1, a2, a3, a4);
+unsigned sbl_parse_header_patched(unsigned a1, unsigned a2, unsigned a3, unsigned a4) {
+	LOG("sbl_parse_header(0x%x, 0x%x, 0x%x, 0x%x)", a1, a2, a3, a4);
 
-	unsigned res = hook_resume_sbl_F3411881(a1, a2, a3, a4);
-	LOG("sbl_F3411881: %x", res);
+	unsigned res = sbl_parse_header(a1, a2, a3, a4);
+	LOG("sbl_parse_header: %x", res);
 	unsigned *somebuf = (unsigned*)a4;
 	u64_t authid;
 
-	if (res == 0x800f0624 || res == 0x800f0616 || res == 0x800f0024 || (res >= 0x800f0b30 && res <= 0x800f0b3f)) {
+	if (res < 0) {
 		DACR_OFF(
 			g_homebrew_decrypt = 1;
 		);
-	// BEGIN 3.60
+		// BEGIN 3.60
 		somebuf[42] = 0x40;
-	// END 3.60
+		// END 3.60
 
 		return 0;
 	} else {
@@ -314,30 +313,28 @@ unsigned hook_sbl_F3411881(unsigned a1, unsigned a2, unsigned a3, unsigned a4) {
 	return res;
 }
 
-// setup output buffer
-unsigned hook_sbl_89CCDA2C(unsigned a1, unsigned a2) {
-	LOG("sbl_89CCDA2C(0x%x, 0x%x) hb=0x%x", a1, a2, g_homebrew_decrypt);
+unsigned sbl_set_up_buffer_patched(unsigned a1, unsigned a2) {
+	LOG("sbl_set_up_buffer(0x%x, 0x%x) hb=0x%x", a1, a2, g_homebrew_decrypt);
 	if (g_homebrew_decrypt == 1)
 		return 2; // always compressed!
-	return hook_resume_sbl_89CCDA2C(a1, a2);
+	return sbl_set_up_buffer(a1, a2);
 }
 
-// decrypt
-unsigned hook_sbl_BC422443(unsigned a1, unsigned a2, unsigned a3) {
-	LOG("sbl_BC422443(0x%x, 0x%x, 0x%x) hb=0x%x", a1, a2, a3, g_homebrew_decrypt);
+unsigned sbl_decrypt_patched(unsigned a1, unsigned a2, unsigned a3) {
+	LOG("sbl_decrypt(0x%x, 0x%x, 0x%x) hb=0x%x", a1, a2, a3, g_homebrew_decrypt);
 	if (g_homebrew_decrypt == 1)
 		return 0;
-	return hook_resume_sbl_BC422443(a1, a2, a3);
+	return sbl_decrypt(a1, a2, a3);
 }
 
 static const char ur0_temp_path[] = "ur0:temp";
 
 static int has_sigpatches = 0;
-static char old_sbl_F3411881[16] = {0};
-static char old_sbl_89CCDA2C[16] = {0};
-static char old_sbl_BC422443[16] = {0};
-static char old_sblai_D78B04A2[16] = {0};
-static char old_sblai_F4B98F66[16] = {0};
+static char old_sbl_parse_header[16] = {0};
+static char old_sbl_set_up_buffer[16] = {0};
+static char old_sbl_decrypt[16] = {0};
+static char old_sbl_is_cex[16] = {0};
+static char old_sbl_is_dex[16] = {0};
 static char old_sysroot_421EFC96[16] = {0};
 static char old_ux0_data_path[9] = {0};
 
@@ -345,23 +342,23 @@ void temp_pkgpatches(void) {
 	void *addr;
 	LOG("inserting temporary patches");
 	addr = find_import(scenpdrm_info, 0xFD00C69A, 0xD78B04A2);
-	LOG("sblai_D78B04A2 stub: %p", addr);
+	LOG("sbl_is_cex stub: %p", addr);
 	DACR_OFF(
-		memcpy(old_sblai_D78B04A2, addr, 16);
-		INSTALL_HOOK(hook_SceSblAIMgrForDriver_D78B04A2, addr);
-		SceCpuForDriver_19f17bd0_flush_icache((uint32_t)addr & ~0x1F, 0x20);
-		SceCpuForDriver_9CB9F0CE_flush_dcache((uint32_t)addr & ~0x1F, 0x20);
+		memcpy(old_sbl_is_cex, addr, 16);
+		INSTALL_HOOK(sbl_is_cex_patched, addr);
+		ksceKernelCpuIcacheAndL2WritebackInvalidateRange((uint32_t)addr & ~0x1F, 0x20);
+		ksceKernelCpuDcacheWritebackRange((uint32_t)addr & ~0x1F, 0x20);
 	);
-	LOG("hooked sblai_D78B04A2");
+	LOG("hooked sbl_is_cex");
 	addr = find_import(scenpdrm_info, 0xFD00C69A, 0xF4B98F66);
-	LOG("sblai_F4B98F66 stub: %p", addr);
+	LOG("sbl_is_dex stub: %p", addr);
 	DACR_OFF(
-		memcpy(old_sblai_F4B98F66, addr, 16);
-		INSTALL_HOOK(hook_SceSblAIMgrForDriver_F4B98F66, addr);
-		SceCpuForDriver_19f17bd0_flush_icache((uint32_t)addr & ~0x1F, 0x20);
-		SceCpuForDriver_9CB9F0CE_flush_dcache((uint32_t)addr & ~0x1F, 0x20);
+		memcpy(old_sbl_is_dex, addr, 16);
+		INSTALL_HOOK(sbl_is_dex_patched, addr);
+		ksceKernelCpuIcacheAndL2WritebackInvalidateRange((uint32_t)addr & ~0x1F, 0x20);
+		ksceKernelCpuDcacheWritebackRange((uint32_t)addr & ~0x1F, 0x20);
 	);
-	LOG("hooked sblai_F4B98F66");
+	LOG("hooked sbl_is_dex");
 
 	__asm__ volatile ("isb" ::: "memory");
 }
@@ -370,21 +367,21 @@ void remove_pkgpatches(void) {
 	void *addr;
 	LOG("removing temporary patches");
 	addr = find_import(scenpdrm_info, 0xFD00C69A, 0xD78B04A2);
-	LOG("sblai_D78B04A2 stub: %p", addr);
+	LOG("sbl_is_cex stub: %p", addr);
 	DACR_OFF(
-		memcpy(addr, old_sblai_D78B04A2, 16);
-		SceCpuForDriver_19f17bd0_flush_icache((uint32_t)addr & ~0x1F, 0x20);
-		SceCpuForDriver_9CB9F0CE_flush_dcache((uint32_t)addr & ~0x1F, 0x20);
+		memcpy(addr, old_sbl_is_cex, 16);
+		ksceKernelCpuIcacheAndL2WritebackInvalidateRange((uint32_t)addr & ~0x1F, 0x20);
+		ksceKernelCpuDcacheWritebackRange((uint32_t)addr & ~0x1F, 0x20);
 	);
-	LOG("unhooked sblai_D78B04A2");
+	LOG("unhooked sbl_is_cex");
 	addr = find_import(scenpdrm_info, 0xFD00C69A, 0xF4B98F66);
-	LOG("sblai_F4B98F66 stub: %p", addr);
+	LOG("sbl_is_dex stub: %p", addr);
 	DACR_OFF(
-		memcpy(addr, old_sblai_F4B98F66, 16);
-		SceCpuForDriver_19f17bd0_flush_icache((uint32_t)addr & ~0x1F, 0x20);
-		SceCpuForDriver_9CB9F0CE_flush_dcache((uint32_t)addr & ~0x1F, 0x20);
+		memcpy(addr, old_sbl_is_dex, 16);
+		ksceKernelCpuIcacheAndL2WritebackInvalidateRange((uint32_t)addr & ~0x1F, 0x20);
+		ksceKernelCpuDcacheWritebackRange((uint32_t)addr & ~0x1F, 0x20);
 	);
-	LOG("unhooked sblai_F4B98F66");
+	LOG("unhooked sbl_is_dex");
 
 	__asm__ volatile ("isb" ::: "memory");
 }
@@ -393,40 +390,40 @@ void temp_sigpatches(void) {
 	void *addr;
 	LOG("inserting temporary patches");
 	addr = find_import(modulemgr_info, 0x7ABF5135, 0xF3411881);
-	LOG("sbl_F3411881 stub: %p\n", addr);
+	LOG("sbl_parse_header stub: %p\n", addr);
 	DACR_OFF(
-		memcpy(old_sbl_F3411881, addr, 16);
-		INSTALL_HOOK(hook_sbl_F3411881, addr);
-		SceCpuForDriver_19f17bd0_flush_icache((uint32_t)addr & ~0x1F, 0x20);
-		SceCpuForDriver_9CB9F0CE_flush_dcache((uint32_t)addr & ~0x1F, 0x20);
+		memcpy(old_sbl_parse_header, addr, 16);
+		INSTALL_HOOK(sbl_parse_header_patched, addr);
+		ksceKernelCpuIcacheAndL2WritebackInvalidateRange((uint32_t)addr & ~0x1F, 0x20);
+		ksceKernelCpuDcacheWritebackRange((uint32_t)addr & ~0x1F, 0x20);
 	);
-	LOG("hooked sbl_F3411881");
+	LOG("hooked sbl_parse_header");
 	addr = find_import(modulemgr_info, 0x7ABF5135, 0x89CCDA2C);
-	LOG("sbl_89CCDA2C stub: %p", addr);
-	DACR_OFF(memcpy(old_sbl_89CCDA2C, addr, 16));
+	LOG("sbl_set_up_buffer stub: %p", addr);
+	DACR_OFF(memcpy(old_sbl_set_up_buffer, addr, 16));
 	DACR_OFF(
-		memcpy(old_sbl_89CCDA2C, addr, 16);
-		INSTALL_HOOK(hook_sbl_89CCDA2C, addr);
-		SceCpuForDriver_19f17bd0_flush_icache((uint32_t)addr & ~0x1F, 0x20);
-		SceCpuForDriver_9CB9F0CE_flush_dcache((uint32_t)addr & ~0x1F, 0x20);
+		memcpy(old_sbl_set_up_buffer, addr, 16);
+		INSTALL_HOOK(sbl_set_up_buffer_patched, addr);
+		ksceKernelCpuIcacheAndL2WritebackInvalidateRange((uint32_t)addr & ~0x1F, 0x20);
+		ksceKernelCpuDcacheWritebackRange((uint32_t)addr & ~0x1F, 0x20);
 	);
-	LOG("hooked sbl_89CCDA2C");
+	LOG("hooked sbl_set_up_buffer");
 	addr = find_import(modulemgr_info, 0x7ABF5135, 0xBC422443);
-	LOG("sbl_BC422443 stub: %p", addr);
+	LOG("sbl_decrypt stub: %p", addr);
 	DACR_OFF(
-		memcpy(old_sbl_BC422443, addr, 16);
-		INSTALL_HOOK(hook_sbl_BC422443, addr);
-		SceCpuForDriver_19f17bd0_flush_icache((uint32_t)addr & ~0x1F, 0x20);
-		SceCpuForDriver_9CB9F0CE_flush_dcache((uint32_t)addr & ~0x1F, 0x20);
+		memcpy(old_sbl_decrypt, addr, 16);
+		INSTALL_HOOK(sbl_decrypt_patched, addr);
+		ksceKernelCpuIcacheAndL2WritebackInvalidateRange((uint32_t)addr & ~0x1F, 0x20);
+		ksceKernelCpuDcacheWritebackRange((uint32_t)addr & ~0x1F, 0x20);
 	);
-	LOG("hooked sbl_BC422443");
+	LOG("hooked sbl_decrypt");
 	addr = find_import(appmgr_info, 0x2ED7F97A, 0x421EFC96);
 	LOG("sysroot_421EFC96 stub: %p", addr);
 	DACR_OFF(
 		memcpy(old_sysroot_421EFC96, addr, 16);
-		INSTALL_HOOK(hook_sysroot_421EFC96, addr);
-		SceCpuForDriver_19f17bd0_flush_icache((uint32_t)addr & ~0x1F, 0x20);
-		SceCpuForDriver_9CB9F0CE_flush_dcache((uint32_t)addr & ~0x1F, 0x20);
+		INSTALL_HOOK(sysroot_421EFC96_patched, addr);
+		ksceKernelCpuIcacheAndL2WritebackInvalidateRange((uint32_t)addr & ~0x1F, 0x20);
+		ksceKernelCpuDcacheWritebackRange((uint32_t)addr & ~0x1F, 0x20);
 	);
 	LOG("hooked sysroot_421EFC96");
 
@@ -435,7 +432,7 @@ void temp_sigpatches(void) {
 		memcpy(old_ux0_data_path, addr, sizeof(old_ux0_data_path));
 		memcpy(addr, ur0_temp_path, sizeof(ur0_temp_path));
 	);
-    LOG("hooked ux0:data path");
+	LOG("hooked ux0:data path");
 
 	DACR_OFF(has_sigpatches = 1);
 
@@ -447,35 +444,35 @@ void remove_sigpatches(void) {
 	if (!has_sigpatches) return;
 	LOG("removing temporary patches");
 	addr = find_import(modulemgr_info, 0x7ABF5135, 0xF3411881);
-	LOG("sbl_F3411881 stub: %p", addr);
+	LOG("sbl_parse_header stub: %p", addr);
 	DACR_OFF(
-		memcpy(addr, old_sbl_F3411881, 16);
-		SceCpuForDriver_19f17bd0_flush_icache((uint32_t)addr & ~0x1F, 0x20);
-		SceCpuForDriver_9CB9F0CE_flush_dcache((uint32_t)addr & ~0x1F, 0x20);
+		memcpy(addr, old_sbl_parse_header, 16);
+		ksceKernelCpuIcacheAndL2WritebackInvalidateRange((uint32_t)addr & ~0x1F, 0x20);
+		ksceKernelCpuDcacheWritebackRange((uint32_t)addr & ~0x1F, 0x20);
 	);
-	LOG("unhooked sbl_F3411881");
+	LOG("unhooked sbl_parse_header");
 	addr = find_import(modulemgr_info, 0x7ABF5135, 0x89CCDA2C);
-	LOG("sbl_89CCDA2C stub: %p", addr);
+	LOG("sbl_set_up_buffer stub: %p", addr);
 	DACR_OFF(
-		memcpy(addr, old_sbl_89CCDA2C, 16);
-		SceCpuForDriver_19f17bd0_flush_icache((uint32_t)addr & ~0x1F, 0x20);
-		SceCpuForDriver_9CB9F0CE_flush_dcache((uint32_t)addr & ~0x1F, 0x20);
+		memcpy(addr, old_sbl_set_up_buffer, 16);
+		ksceKernelCpuIcacheAndL2WritebackInvalidateRange((uint32_t)addr & ~0x1F, 0x20);
+		ksceKernelCpuDcacheWritebackRange((uint32_t)addr & ~0x1F, 0x20);
 	);
-	LOG("unhooked sbl_89CCDA2C");
+	LOG("unhooked sbl_set_up_buffer");
 	addr = find_import(modulemgr_info, 0x7ABF5135, 0xBC422443);
-	LOG("sbl_BC422443 stub: %p", addr);
+	LOG("sbl_decrypt stub: %p", addr);
 	DACR_OFF(
-		memcpy(addr, old_sbl_BC422443, 16);
-		SceCpuForDriver_19f17bd0_flush_icache((uint32_t)addr & ~0x1F, 0x20);
-		SceCpuForDriver_9CB9F0CE_flush_dcache((uint32_t)addr & ~0x1F, 0x20);
+		memcpy(addr, old_sbl_decrypt, 16);
+		ksceKernelCpuIcacheAndL2WritebackInvalidateRange((uint32_t)addr & ~0x1F, 0x20);
+		ksceKernelCpuDcacheWritebackRange((uint32_t)addr & ~0x1F, 0x20);
 	);
-	LOG("unhooked sbl_BC422443");
+	LOG("unhooked sbl_decrypt");
 	addr = find_import(appmgr_info, 0x2ED7F97A, 0x421EFC96);
 	LOG("sysroot_421EFC96 stub: %p", addr);
 	DACR_OFF(
 		memcpy(addr, old_sysroot_421EFC96, 16);
-		SceCpuForDriver_19f17bd0_flush_icache((uint32_t)addr & ~0x1F, 0x20);
-		SceCpuForDriver_9CB9F0CE_flush_dcache((uint32_t)addr & ~0x1F, 0x20);
+		ksceKernelCpuIcacheAndL2WritebackInvalidateRange((uint32_t)addr & ~0x1F, 0x20);
+		ksceKernelCpuDcacheWritebackRange((uint32_t)addr & ~0x1F, 0x20);
 	);
 	LOG("unhooked sysroot_421EFC96");
 
@@ -495,24 +492,24 @@ static int get_shell_pid(void) {
 	int ret, ppid, pppid;
 
 	data[0] = sizeof(data);
-	ret = SceProcessmgrForDriver_0AFF3EAE_get_data(0, data);
+	ret = ksceKernelGetProcessInfo(0, data);
 	ppid = data[5];
 	LOG("ret: %x, ppid: %x", ret, ppid);
-	ret = SceProcessmgrForDriver_0AFF3EAE_get_data(ppid, data);
+	ret = ksceKernelGetProcessInfo(ppid, data);
 	pppid = data[5];
 	LOG("ret: %x, shell_pid: %x", ret, pppid);
 	return pppid;
 }
 
 int load_taihen(void) {
-  int state;
+	int state;
 	int opt, taiid, modid, ret, result;
 
-  ENTER_SYSCALL(state);
+	ENTER_SYSCALL(state);
 
 	// load taiHEN
 	opt = 4;
-	taiid = ksceKernelLoadModuleWithoutStart("ur0:tai/taihen.skprx", 0, &opt);
+	taiid = ksceKernelLoadModule("ur0:tai/taihen.skprx", 0, &opt);
 	LOG("LoadTaiHEN: 0x%08X", taiid);
 	remove_sigpatches();
 	LOG("Removed temp patches");
@@ -527,7 +524,7 @@ int load_taihen(void) {
 	}
 
 	// load henkaku kernel
-	modid = ksceKernelLoadModuleWithoutStart("ur0:tai/henkaku.skprx", 0, &opt);
+	modid = ksceKernelLoadModule("ur0:tai/henkaku.skprx", 0, &opt);
 	LOG("LoadHENKaku kernel: 0x%08X", modid);
 	result = 0;
 	ret = ksceKernelStartModule(modid, 4, &shell_pid, 0, NULL, &result);
@@ -558,10 +555,10 @@ void cleanup_memory(void) {
 	// TODO: Delete bootstrap.self (#37)
 	// remove syscalls
 	LOG("removing syscalls");
-	SceModulemgrForKernel_0xB427025E_set_syscall(syscall_id + 0, syscall_stub);
-	SceModulemgrForKernel_0xB427025E_set_syscall(syscall_id + 1, syscall_stub);
-	SceModulemgrForKernel_0xB427025E_set_syscall(syscall_id + 2, syscall_stub);
-	SceModulemgrForKernel_0xB427025E_set_syscall(syscall_id + 3, syscall_stub);
+	ksceKernelSetSyscall(syscall_id + 0, syscall_stub);
+	ksceKernelSetSyscall(syscall_id + 1, syscall_stub);
+	ksceKernelSetSyscall(syscall_id + 2, syscall_stub);
+	ksceKernelSetSyscall(syscall_id + 3, syscall_stub);
 	LOG("freeing memory");
 	ksceKernelFreeMemBlock(g_rw_block); // free stage 2 stack
 	LOG("freeing executable memory");
@@ -611,8 +608,8 @@ int thread_main(int args, void *argp) {
 		}
 		opt[0] = sizeof(opt);
 		LOG("Launching bootstrap...");
-		ret = SceAppMgrForDriver_launchbypath(launch_path, real_args, sizeof(launch_args), 0, opt, NULL);
-		LOG("SceAppMgrForDriver_launchbypath: %x", ret);
+		ret = ksceAppMgrLaunchAppByPath(launch_path, real_args, sizeof(launch_args), 0, opt, NULL);
+		LOG("ksceAppMgrLaunchAppByPath: %x", ret);
 	}
 	if (ret < 0) {
 		LOG("unable to write bootstrap!");
@@ -630,10 +627,10 @@ int thread_main(int args, void *argp) {
 }
 
 int add_syscalls(void) {
-	SceModulemgrForKernel_0xB427025E_set_syscall(syscall_id + 0, load_taihen);
-	SceModulemgrForKernel_0xB427025E_set_syscall(syscall_id + 1, remove_pkgpatches);
-	SceModulemgrForKernel_0xB427025E_set_syscall(syscall_id + 2, remove_sigpatches);
-	SceModulemgrForKernel_0xB427025E_set_syscall(syscall_id + 3, cleanup_memory);
+	ksceKernelSetSyscall(syscall_id + 0, load_taihen);
+	ksceKernelSetSyscall(syscall_id + 1, remove_pkgpatches);
+	ksceKernelSetSyscall(syscall_id + 2, remove_sigpatches);
+	ksceKernelSetSyscall(syscall_id + 3, cleanup_memory);
 	return 0;
 }
 
@@ -712,26 +709,26 @@ void resolve_imports(unsigned sysmem_base) {
 	LOG("=> ret = 0x%08x", ret);
 
 	DACR_OFF(
-		hook_resume_sbl_F3411881 = find_export(sblauthmgr_info, 0xF3411881);
-		hook_resume_sbl_89CCDA2C = find_export(sblauthmgr_info, 0x89CCDA2C);
-		hook_resume_sbl_BC422443 = find_export(sblauthmgr_info, 0xBC422443);
+		sbl_parse_header = find_export(sblauthmgr_info, 0xF3411881);
+		sbl_set_up_buffer = find_export(sblauthmgr_info, 0x89CCDA2C);
+		sbl_decrypt = find_export(sblauthmgr_info, 0xBC422443);
 
-		SceCpuForDriver_19f17bd0_flush_icache = find_export(sysmem_info, 0x19f17bd0);
-		SceCpuForDriver_9CB9F0CE_flush_dcache = find_export(sysmem_info, 0x9CB9F0CE);
+		ksceKernelCpuIcacheAndL2WritebackInvalidateRange = find_export(sysmem_info, 0x19f17bd0);
+		ksceKernelCpuDcacheWritebackRange = find_export(sysmem_info, 0x9CB9F0CE);
 		ksceIoOpen = find_export(iofilemgr_info, 0x75192972);
 		ksceIoClose = find_export(iofilemgr_info, 0xf99dd8a3);
 		ksceIoWrite = find_export(iofilemgr_info, 0x21ee91f0);
-		SceAppMgrForDriver_launchbypath = find_export(appmgr_info, 0xB0A37065);
-		ksceKernelLoadModuleWithoutStart = find_export(modulemgr_info, 0x86D8D634);
+		ksceAppMgrLaunchAppByPath = find_export(appmgr_info, 0xB0A37065);
+		ksceKernelLoadModule = find_export(modulemgr_info, 0x86D8D634);
 		ksceKernelStartModule = find_export(modulemgr_info, 0x0675B682);
-		SceModulemgrForKernel_0xB427025E_set_syscall = find_export(modulemgr_info, 0xB427025E);
+		ksceKernelSetSyscall = find_export(modulemgr_info, 0xB427025E);
 		ksceKernelFreeMemBlock = find_export(sysmem_info, 0x9e1c61);
 		ksceKernelFindMemBlockByAddr = find_export(sysmem_info, 0x8a1742f6);
 		ksceKernelCreateThread = find_export(threadmgr_info, 0xC6674E7D);
 		ksceKernelStartThread = find_export(threadmgr_info, 0x21F5419B);
 		ksceKernelExitDeleteThread = find_export(threadmgr_info, 0x1D17DECF);
 		ksceKernelGetMemBlockBase = find_export(sysmem_info, 0xA841EDDA);
-		SceProcessmgrForDriver_0AFF3EAE_get_data = find_export(processmgr_info, 0x0AFF3EAE);
+		ksceKernelGetProcessInfo = find_export(processmgr_info, 0x0AFF3EAE);
 	);
 
 	// BEGIN 3.60
@@ -791,7 +788,7 @@ void __attribute__ ((section (".text.start"))) payload(uint32_t sysmem_addr, voi
 	void *base;
 	ret = ksceKernelGetMemBlockBase(rx_block, &base);
 	LOG("ksceKernelGetMemBlockBase: %x, %x", ret, base);
-	SceCpuForDriver_9CB9F0CE_flush_dcache((uint32_t)base, (rx_size + 0x1f) & ~0x1f);
+	ksceKernelCpuDcacheWritebackRange((uint32_t)base, (rx_size + 0x1f) & ~0x1f);
 
 	int tid;
 	LOG("starting kernel thread");

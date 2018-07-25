@@ -10,9 +10,8 @@
 #include "language.h"
 #include "../build/version.c"
 
-#define DISPLAY_VERSION (0x3600000)
-
 int _vshIoMount(int id, const char *path, int permissions, void *opt);
+int _vshSblGetSystemSwVersion(SceKernelFwInfo *info);
 
 extern unsigned char _binary_system_settings_xml_start;
 extern unsigned char _binary_system_settings_xml_size;
@@ -26,15 +25,17 @@ static SceUID g_hooks[15];
 static tai_hook_ref_t g_sceKernelGetSystemSwVersion_SceSettings_hook;
 static int sceKernelGetSystemSwVersion_SceSettings_patched(SceKernelFwInfo *info) {
   int ret;
-  int ver_major;
-  int ver_minor;
+  SceKernelFwInfo real_info;
   ret = TAI_CONTINUE(int, g_sceKernelGetSystemSwVersion_SceSettings_hook, info);
-  ver_major = ((DISPLAY_VERSION >> 24) & 0xF) + 10 * (DISPLAY_VERSION >> 28);
-  ver_minor = ((DISPLAY_VERSION >> 16) & 0xF) + 10 * ((DISPLAY_VERSION >> 20) & 0xF);
+  sceClibMemset(&real_info, 0, sizeof(SceKernelFwInfo));
+  real_info.size = sizeof(SceKernelFwInfo);
+  _vshSblGetSystemSwVersion(&real_info);
   if (BETA_RELEASE) {
-    sceClibSnprintf(info->versionString, 16, "%d.%02d \xE5\xA4\x89\xE9\x9D\xA9-%d\xCE\xB2%d", ver_major, ver_minor, HENKAKU_RELEASE, BETA_RELEASE);
+    sceClibSnprintf(info->versionString, 16, "%s \xE5\xA4\x89\xE9\x9D\xA9-%d\xCE\xB2%d", real_info.versionString, HENKAKU_RELEASE, BETA_RELEASE);
+  } else if (HENKAKU_RELEASE > 1) {
+    sceClibSnprintf(info->versionString, 16, "%s \xE5\xA4\x89\xE9\x9D\xA9-%d", real_info.versionString, HENKAKU_RELEASE);
   } else {
-    sceClibSnprintf(info->versionString, 16, "%d.%02d \xE5\xA4\x89\xE9\x9D\xA9-%d", ver_major, ver_minor, HENKAKU_RELEASE);
+    sceClibSnprintf(info->versionString, 16, "%s \xE5\xA4\x89\xE9\x9D\xA9", real_info.versionString);
   }
   return ret;
 }

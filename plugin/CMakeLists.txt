@@ -73,7 +73,6 @@ target_link_libraries(kernel
   SceSysclibForDriver_stub
   SceIofilemgrForDriver_stub
   SceDebugForDriver_stub
-  SceModulemgrForKernel_stub
   SceThreadmgrForDriver_stub
 )
 

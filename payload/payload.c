@@ -713,17 +713,17 @@ void resolve_imports(unsigned sysmem_base) {
 		sbl_set_up_buffer = find_export(sblauthmgr_info, 0x89CCDA2C);
 		sbl_decrypt = find_export(sblauthmgr_info, 0xBC422443);
 
-		ksceKernelCpuIcacheAndL2WritebackInvalidateRange = find_export(sysmem_info, 0x19f17bd0);
+		ksceKernelCpuIcacheAndL2WritebackInvalidateRange = find_export(sysmem_info, 0x19F17BD0);
 		ksceKernelCpuDcacheWritebackRange = find_export(sysmem_info, 0x9CB9F0CE);
 		ksceIoOpen = find_export(iofilemgr_info, 0x75192972);
-		ksceIoClose = find_export(iofilemgr_info, 0xf99dd8a3);
-		ksceIoWrite = find_export(iofilemgr_info, 0x21ee91f0);
+		ksceIoClose = find_export(iofilemgr_info, 0xF99DD8A3);
+		ksceIoWrite = find_export(iofilemgr_info, 0x21EE91F0);
 		ksceAppMgrLaunchAppByPath = find_export(appmgr_info, 0xB0A37065);
 		ksceKernelLoadModule = find_export(modulemgr_info, 0x86D8D634);
 		ksceKernelStartModule = find_export(modulemgr_info, 0x0675B682);
 		ksceKernelSetSyscall = find_export(modulemgr_info, 0xB427025E);
-		ksceKernelFreeMemBlock = find_export(sysmem_info, 0x9e1c61);
-		ksceKernelFindMemBlockByAddr = find_export(sysmem_info, 0x8a1742f6);
+		ksceKernelFreeMemBlock = find_export(sysmem_info, 0x009E1C61);
+		ksceKernelFindMemBlockByAddr = find_export(sysmem_info, 0x8A1742F6);
 		ksceKernelCreateThread = find_export(threadmgr_info, 0xC6674E7D);
 		ksceKernelStartThread = find_export(threadmgr_info, 0x21F5419B);
 		ksceKernelExitDeleteThread = find_export(threadmgr_info, 0x1D17DECF);
@@ -749,7 +749,7 @@ void __attribute__ ((section (".text.start"))) payload(uint32_t sysmem_addr, voi
 	uint32_t sysmem_base = sysmem_addr;
 	int ret;
 	// BEGIN 3.60
-	void (*debug_print_local)(char *s, ...) = (void*)(sysmem_base + 0x1A155);
+	void (*debug_print_local)(char *s, ...) = (void*)(sysmem_base + 0x1a155);
 	// END 3.60
 
 	DACR_OFF(
@@ -788,7 +788,7 @@ void __attribute__ ((section (".text.start"))) payload(uint32_t sysmem_addr, voi
 	void *base;
 	ret = ksceKernelGetMemBlockBase(rx_block, &base);
 	LOG("ksceKernelGetMemBlockBase: %x, %x", ret, base);
-	ksceKernelCpuDcacheWritebackRange((uint32_t)base, (rx_size + 0x1f) & ~0x1f);
+	ksceKernelCpuDcacheWritebackRange((uint32_t)base, (rx_size + 0x1F) & ~0x1F);
 
 	int tid;
 	LOG("starting kernel thread");

@@ -10,11 +10,11 @@ void __attribute__((noreturn)) loader(uint32_t sysmem_addr, void *second_payload
 	uint32_t sysmem_base = sysmem_addr;
 	// BEGIN 3.60
 	void (*set_crash_flag)(int) = (void *)(sysmem_base + 0x1990d);
-	void (*debug_print_local)(char *s, ...) = (void*)(sysmem_base + 0x1A155);
-	uint32_t (*ksceKernelAllocMemBlock)(const char *s, uint32_t type, uint32_t size, void *pargs) = (void*)(sysmem_base + 0xA521);
-	uint32_t (*ksceKernelGetMemBlockBase)(uint32_t blkid, void **base) = (void*)(sysmem_base + 0x1F15);
+	void (*debug_print_local)(char *s, ...) = (void*)(sysmem_base + 0x1a155);
+	uint32_t (*ksceKernelAllocMemBlock)(const char *s, uint32_t type, uint32_t size, void *pargs) = (void*)(sysmem_base + 0xa521);
+	uint32_t (*ksceKernelGetMemBlockBase)(uint32_t blkid, void **base) = (void*)(sysmem_base + 0x1f15);
 	void (*ksceKernelCpuUnrestrictedMemcpy)() = (void*)(sysmem_base + 0x23095);
-	void (*ksceKernelMemcpyUserToKernel)(void *dst, void *src, uint32_t sz) = (void*)(sysmem_base + 0x825D);
+	void (*ksceKernelMemcpyUserToKernel)(void *dst, void *src, uint32_t sz) = (void*)(sysmem_base + 0x825d);
 	// END 3.60
 
 #if !RELEASE
